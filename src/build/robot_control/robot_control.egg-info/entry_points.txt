@@ -1,2 +1,0 @@
-[console_scripts]
-stm32_driver = robot_control.stm32_driver:main
