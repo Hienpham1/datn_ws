@@ -1,4 +1,5 @@
 import rclpy
+import rclpy.logging
 from rclpy.node import Node
 from std_msgs.msg import Int32 #msgs de pub du lieu encoder
 import serial
@@ -18,8 +19,8 @@ class STM32Driver(Node):
         self.declare_parameter('serial_port', '/dev/ttyUSB0')
         self.declare_parameter('baud_rate', 115200)
 
-        port = self.set_parameters('serial_port').value
-        baud = self.get_parameter('naud_rate').value
+        port = self.get_parameter('serial_port').value
+        baud = self.get_parameter('baud_rate').value
 
         self.serial_port = serial.Serial(
             port=port, #tim cong cho dung
@@ -50,13 +51,13 @@ class STM32Driver(Node):
         self.battery_pub = self.create_publisher(Int32, 'battery_voltage', 10)
 
     def _init_subscribers(self):
-        self.cdm_vel_sub = self.create_subscription(
+        self.cmd_vel_sub = self.create_subscription(
             Twist,
             'cmd_vel',
             self.velocity_callback,
             10
         )
-        self.cdm_vel_sub
+        self.cmd_vel_sub
 
     def timer_callback(self):
         try:
@@ -92,14 +93,14 @@ class STM32Driver(Node):
 
         #chuyen doi tu m/s sang PWM
         max_pwm = 1000
-        lef_pwm = int(left_speed * 100) # hang so khech dai
+        left_pwm = int(left_speed * 100) # hang so khech dai
         right_pwm = int(right_speed * 100)
 
-        lef_pwm = max(-max_pwm, min(max_pwm, lef_pwm))
+        left_pwm = max(-max_pwm, min(max_pwm, left_pwm))
         right_pwm = max(-max_pwm, min(max_pwm, right_pwm))
 
         #sau do gui lenh cho stm32
-        self.send_motor_command(lef_pwm, right_pwm)
+        self.send_motor_command(left_pwm, right_pwm)
         self.last_cmd_time = self.get_clock().now()
 
     def send_motor_command(self, left, right):
@@ -123,7 +124,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        node.get_logger().error(f'Node err: {str(e)}')
+        rclpy.logging.get_logger('stm32_driver').error(f'Node err: {str(e)}')
+        #node.get_logger().error(f'Node err: {str(e)}')
     finally:
         node.destroy_node()
         rclpy.shutdown()
