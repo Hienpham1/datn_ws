@@ -1,28 +1,36 @@
 #include <Encoder.h>
 #include <Wire.h> // Thư viện I2C cho IMU
 
-// ========== KHAI BÁO CHÂN TỐI ƯU ========== //
-// Motor 1 (Dùng Timer0 - An toàn)
-#define MOTOR1_L_PWM 5     // PWM L (chân 5 - Timer0)
-#define MOTOR1_R_PWM 6     // PWM R (chân 6 - Timer0)
-#define MOTOR1_EN_L 7      // Enable L
-#define MOTOR1_EN_R 8      // Enable R
+// Định nghĩa chân cho Module 1 (Động cơ 1)
+#define M1_IN_R 6   // PWM chiều thuận
+#define M1_IN_L 7   // PWM chiều ngược
+#define M1_EN_R 4   // Enable chiều thuận
+#define M1_EN_L 5   // Enable chiều ngược
 
-// Motor 2 (Dùng Timer2 - Tránh chân ngắt)
-#define MOTOR2_L_PWM 9     // PWM L (chân 9 - Timer1)
-#define MOTOR2_R_PWM 10    // PWM R (chân 10 - Timer1)
-#define MOTOR2_EN_L 11     // Enable L
-#define MOTOR2_EN_R 12     // Enable R
+// Định nghĩa chân cho Module 2 (Động cơ 2)
+#define M2_IN_R 9   // PWM chiều thuận
+#define M2_IN_L 10   // PWM chiều ngược
+#define M2_EN_R 11   // Enable chiều thuận
+#define M2_EN_L 12   // Enable chiều ngược
 
-// Encoder (Giữ nguyên chân ngắt 2,3)
-Encoder enc1(2, 3);  // 
-Encoder enc2(18, 19); //
+// Định nghĩa chân encoder
+#define ENC1_A 2  // Encoder 1 chân A (ngắt 5)
+#define ENC1_B 14  // Encoder 1 chân B
+#define ENC2_A 3  // Encoder 2 chân A (ngắt 3)
+#define ENC2_B 15  // Encoder 2 chân B
+
+#define DISABLE LOW
+#define ENABLE HIGH
+
+// Khởi tạo encoder
+Encoder enc1(ENC1_A, ENC1_B);
+Encoder enc2(ENC2_A, ENC2_B);
 
 // IMU (giả sử dùng MPU6050)
 #define MPU6050_ADDR 0x68
 int16_t angle = 0;
 
-// Dữ liệu truyền
+// Biến dữ liệu truyền
 uint8_t ros[8] = {0x02, 0, 0, 0, 0, 0, 0, 0x03};
 uint8_t rx_buffer[6];
 int16_t en1 = 0, en2 = 0;
@@ -31,30 +39,36 @@ void read_encoders();
 void read_imu();
 void send_ros();
 void receive_ros();
-void setMotor1(int pwm, bool dir);
-void setMotor2(int pwm, bool dir);
+void DC_left(unsigned char p, unsigned char d, unsigned char e);
+void DC_right(unsigned char p, unsigned char d, unsigned char e);
 void stopAllMotors();
-void printEncoderValues();
 
 
 void setup() {
-  Serial.begin(115200);// UART giao tiếp với ROS2
-  Wire.begin(); // I2C giao tiếp với IMU
-  // Cấu hình chân motor
-  pinMode(MOTOR1_L_PWM, OUTPUT);
-  pinMode(MOTOR1_R_PWM, OUTPUT);
-  pinMode(MOTOR1_EN_L, OUTPUT);
-  pinMode(MOTOR1_EN_R, OUTPUT);
+  // Cấu hình chân Module 1
+  pinMode(M1_IN_L, OUTPUT);
+  pinMode(M1_EN_R, OUTPUT);
+  pinMode(M1_EN_L, OUTPUT);
   
-  pinMode(MOTOR2_L_PWM, OUTPUT);
-  pinMode(MOTOR2_R_PWM, OUTPUT);
-  pinMode(MOTOR2_EN_L, OUTPUT);
-  pinMode(MOTOR2_EN_R, OUTPUT);
+  // Cấu hình chân Module 2
+  pinMode(M2_IN_L, OUTPUT);
+  pinMode(M2_EN_R, OUTPUT);
+  pinMode(M2_EN_L, OUTPUT);
+  
+  // Tắt động cơ ban đầu
+  digitalWrite(M1_EN_R, DISABLE);
+  digitalWrite(M1_EN_L, DISABLE);
+  digitalWrite(M2_EN_R, DISABLE);
+  digitalWrite(M2_EN_L, DISABLE);
+  
+  Serial.begin(9600);
+  Serial1.begin(115200); // Khởi tạo Serial1 với baudrate 115200 giao tiếp với ROS
+  Wire.begin();
 
-  // Khởi tạo IMU
+    // Khởi tạo IMU
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(0x6B); // Thanh ghi PWR_MGMT_1
-  Wire.write(0); // Bật IMU
+  Wire.write(0);    // Bật IMU
   Wire.endTransmission();
 
   stopAllMotors();
@@ -62,20 +76,18 @@ void setup() {
 }
 
 void loop() {
-  // Đọc và hiển thị encoder
-  printEncoderValues();
-  
-  send_ros(); // Gửi dữ liệu encoder và IMU đến ROS2
-  receive_ros(); // Nhận lệnh điều khiển từ ROS2
-  delay(50); // Chu kỳ 50ms
-}
 
+  read_imu();
+
+  DC_left( 255, LOW, ENABLE);
+  DC_right( 255, HIGH, ENABLE);
+
+}
 // ========== HÀM ĐIỀU KHIỂN ========== //
 void read_encoders() {
   en1 = enc1.read();
   en2 = enc2.read();
 }
-
 void read_imu() {
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(0x3B); // Thanh ghi ACCEL_XOUT_H
@@ -88,6 +100,7 @@ void read_imu() {
 
   // Tính toán góc (giả sử chỉ dùng trục X)
   angle = atan2(accel_y, accel_z) * 180 / 3.14159;
+  Serial.println(angle);
 }
 
 void send_ros() {
@@ -101,25 +114,34 @@ void send_ros() {
   ros[5] = en2 >> 8;
   ros[6] = en2 & 0xFF;
 
-  Serial.write(ros, 8);
+  Serial1.write(ros, 8);
 }
-
 void receive_ros() {
-  if (Serial.available() >= 6) {
-    Serial.readBytes(rx_buffer, 6);
+  if (Serial1.available() >= 6) {
+    Serial1.readBytes(rx_buffer, 6);
 
     uint8_t reset = rx_buffer[0];
     uint8_t dir1 = rx_buffer[1];
-    uint8_t speed1 = rx_buffer[2];
+    uint8_t speed1 = rx_buffer[2]; //uint8_t và unsigned char bản chất là 1 kiểu dữ liệu nên truyền biến speed vào được
     uint8_t dir2 = rx_buffer[3];
     uint8_t speed2 = rx_buffer[4];
 
     // Điều khiển động cơ 1
-    setMotor1(speed1, dir1);
+    if(dir1){
+      DC_left(speed1, LOW, ENABLE);
+    }
+    else{
+      DC_left(speed1, HIGH, ENABLE);
+    }
+    
 
     // Điều khiển động cơ 2
-    setMotor2(speed2, dir2);
-
+    if(dir2){
+      DC_right(speed2, LOW, ENABLE);
+    }
+    else{
+      DC_right(speed2, HIGH, ENABLE);
+    }
     // Reset encoder nếu cần
     if (reset == 1) {
       enc1.write(0);
@@ -128,57 +150,40 @@ void receive_ros() {
   }
 }
 
-void setMotor1(int pwm, bool dir) {
-  if(dir1) {
-    analogWrite(MOTOR1_L_PWM, pwm);
-    digitalWrite(MOTOR1_R_PWM, LOW);
-    digitalWrite(MOTOR1_EN_L, HIGH);
-    digitalWrite(MOTOR1_EN_R, LOW);
-  } else {
-    analogWrite(MOTOR1_R_PWM, pwm);
-    digitalWrite(MOTOR1_L_PWM, LOW);
-    digitalWrite(MOTOR1_EN_R, HIGH);
-    digitalWrite(MOTOR1_EN_L, LOW);
+// Hàm điều khiển động cơ 1
+void DC_left(unsigned char p, unsigned char d, unsigned char e){
+  digitalWrite(M1_EN_R, e);
+  digitalWrite(M1_EN_L, e);
+  digitalWrite(M1_IN_L, d);
+  if(d == LOW){
+    analogWrite(M1_IN_R, p);
+    Serial.println("DC1 thuan");
+  }
+  else{
+    analogWrite(M1_IN_R, 255 - p);
+    Serial.println("DC1 nghich");
   }
 }
-
-void setMotor2(int pwm, bool dir) {
-  if(dir2) {
-    analogWrite(MOTOR2_L_PWM, pwm);
-    digitalWrite(MOTOR2_R_PWM, LOW);
-    digitalWrite(MOTOR2_EN_L, HIGH);
-    digitalWrite(MOTOR2_EN_R, LOW);
-  } else {
-    analogWrite(MOTOR2_R_PWM, pwm);
-    digitalWrite(MOTOR2_L_PWM, LOW);
-    digitalWrite(MOTOR2_EN_R, HIGH);
-    digitalWrite(MOTOR2_EN_L, LOW);
+// Hàm điều khiển động cơ 1
+void DC_right(unsigned char p, unsigned char d, unsigned char e){
+  digitalWrite(M2_EN_R, e);
+  digitalWrite(M2_EN_L, e);
+  digitalWrite(M2_IN_L, d);
+  if(d == LOW){
+    analogWrite(M2_IN_R, p);
+    Serial.println("DC2 nghich");
+  }
+  else{
+    analogWrite(M2_IN_R, 255 - p);
+    Serial.println("DC2 thuan");
   }
 }
-
 void stopAllMotors() {
-  digitalWrite(MOTOR1_L_PWM, LOW);
-  digitalWrite(MOTOR1_R_PWM, LOW);
-  digitalWrite(MOTOR1_EN_L, LOW);
-  digitalWrite(MOTOR1_EN_R, LOW);
-  
-  digitalWrite(MOTOR2_L_PWM, LOW);
-  digitalWrite(MOTOR2_R_PWM, LOW);
-  digitalWrite(MOTOR2_EN_L, LOW);
-  digitalWrite(MOTOR2_EN_R, LOW);
+  digitalWrite(M1_EN_R, DISABLE);
+  digitalWrite(M1_EN_L, DISABLE);
+  digitalWrite(M2_EN_R, DISABLE);
+  digitalWrite(M2_EN_L, DISABLE);
 }
-
-void printEncoderValues() {
-  static unsigned long lastPrint = 0;
-  if(millis() - lastPrint > 100) {
-    Serial.print("Enc1: ");
-    Serial.print(enc1.read());
-    Serial.print(" | Enc2: ");
-    Serial.println(enc2.read());
-    lastPrint = millis();
-  }
-}
-
 /* PID nếu dùng 
 #include <PID_v1.h>
 double setpoint1 = 0, setpoint2 = 0; // Tốc độ mong muốn
