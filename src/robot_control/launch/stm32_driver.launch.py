@@ -8,7 +8,7 @@ def generate_launch_descriptions():
             executable='stm32_driver',
             name='stm32_driver',
             parameters=[{
-                'serial_port': '/dev/ttyUSB0',
+                'serial_port': '/dev/ttyAMA10',
                 'baud_rate': 115200
             }],
             output='screen'

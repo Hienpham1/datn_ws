@@ -20,9 +20,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'stm32_driver = robot_control.stm32_driver:main',
-            'arduino_node = robot_control.ROS2_UART_Arduino:main',
-            'keyboard_controller = robot_control.keyboard_controller:main'
+            'connect_node = robot_control.node_serial:main',
+            'inverse_kinetic = robot_control.inverse_kinetic:main',
+            'square_controller = robot_control.square_controller:main'
         ],
     },
 )
