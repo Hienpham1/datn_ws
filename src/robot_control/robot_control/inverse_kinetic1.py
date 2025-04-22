@@ -2,13 +2,13 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Int16MultiArray
-from std_msgs.msg import Float32MultiArray
 import math
 import time
 
+
 class InverseKineticNode(Node):
     def __init__(self):
-        super().__init__('inverse_kinetic')
+        super().__init__('inverse_kinetic_pwm')
 
         # Declare and get parameters
         self.declare_parameter('topic_velocities', 'topic_velocities')
@@ -37,7 +37,7 @@ class InverseKineticNode(Node):
         self.up_cnt = 0
         self.down_cnt = 0
         self.left_wheel_velocity = 0
-        self.right_wheel_velocity = 0   
+        self.right_wheel_velocity = 0
         self.prev_time = time.time()
 
         # Publisher and Subscriber
@@ -54,8 +54,6 @@ class InverseKineticNode(Node):
         omega_right = (1.0 / (2.0 * self.wheel_radius)) * (2.0 * linear_vel + self.wheels_distance * angular_vel)
         self.left_wheel_velocity = self.convert_pwm(omega_left * (60 / (2 * math.pi)))
         self.right_wheel_velocity = self.convert_pwm(omega_right * (60 / (2 * math.pi)))
-        #self.left_wheel_velocity = int(omega_left * 100)
-        #self.right_wheel_velocity = int(omega_right * 100)
         self.get_logger().info(f"pub velo: left={-self.left_wheel_velocity}, right={self.right_wheel_velocity}")
         self.get_logger().info(f"omega_left={omega_left}, omega_right={omega_right}")
     def velocity_handling(self):

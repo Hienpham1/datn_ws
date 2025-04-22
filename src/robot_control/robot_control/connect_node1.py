@@ -4,7 +4,6 @@ from std_msgs.msg import Int16MultiArray
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import Quaternion
-from std_msgs.msg import Float32MultiArray
 
 import serial
 import time
@@ -13,7 +12,7 @@ import math
 
 class ConnectNode(Node):
     def __init__(self):
-        super().__init__('connect_node')
+        super().__init__('connect_node_pwm')
 
         # Declare parameters
         self.declare_parameter('port', '/dev/ttyUSB0')
@@ -24,7 +23,7 @@ class ConnectNode(Node):
         self.declare_parameter('wheels_distance', 0.32)
         self.declare_parameter('pulses_per_revolution', 1000.0) # che do doc rising 
         self.declare_parameter('topic_velocities', 'topic_velocities')
-        
+
         # Get parameters
         self.port = self.get_parameter('port').get_parameter_value().string_value
         self.topic_odom = self.get_parameter('topic_odom').get_parameter_value().string_value
@@ -34,7 +33,7 @@ class ConnectNode(Node):
         self.wheels_distance = self.get_parameter('wheels_distance').get_parameter_value().double_value
         self.pulses_per_revolution = self.get_parameter('pulses_per_revolution').get_parameter_value().double_value
         self.topic_velocities = self.get_parameter('topic_velocities').get_parameter_value().string_value
-        
+
         # Initialize variables
         self.ser = None
         self.rec_data = 0
@@ -60,8 +59,7 @@ class ConnectNode(Node):
         # Publishers and Subscribers
         self.odom_pub = self.create_publisher(Odometry, self.topic_odom, 10)
         self.imu_pub = self.create_publisher(Imu, self.topic_imu, 10)
-        self.velo_sub = self.create_subscription(Int16MultiArray, self.topic_velocities, self.velocities_callback, 10)
-        self.omega_pub = self.create_publisher(Float32MultiArray, 'omega_actual', 10)
+        self.create_subscription(Int16MultiArray, self.topic_velocities, self.velocities_callback, 10)
 
         # Connect to serial
         self.connect_serial()
@@ -134,10 +132,11 @@ class ConnectNode(Node):
                         self._check = True
                 self.odom()
                 self.imu_data()
-                #self.get_logger().info(f"en1 = {self.en1}, en2 = {self.en2}")
+                self.get_logger().info(f"en1 = {self.en1}, en2 = {self.en2}, angle = {self.angle}")
             else:
                 self.buff_data[self.count] = self.rec_data
                 self.count += 1
+            #self.get_logger().info(f"[receive] angle: {self.angle}, en1: {self.en1}, en2: {self.en2}")
 
     def imu_data(self):
         current_time = time.time()
@@ -155,21 +154,15 @@ class ConnectNode(Node):
     def odom(self):
         current_time = time.time()
         dt = current_time - self.pre_measurement_time
-        v_l = self.en1 * self.scaling_factor / dt
-        v_r = self.en2 * self.scaling_factor / dt
-        v = (v_r + v_l) / 2
-        w = (v_r - v_l) / self.wheels_distance
-        msg = Float32MultiArray()
-        msg.data = [v_l, v_r]
-        self.omega_pub.publish(msg)
-        self.get_logger().info(f"[omega_left_back={v_l}, omega_right_back={v_r}")
+        omega_right = self.en1 * self.scaling_factor
+        omega_left = self.en2 * self.scaling_factor
+        delta_theta = (omega_right + omega_left) / self.wheels_distance
+        delta_s = (omega_right - omega_left) / 2.0
+        self.get_logger().info(f"[omega_left={self.en1 * self.scaling_factor}, omega_right={self.en2 * self.scaling_factor}")
 
-        delta_theta = w * dt
-        delta_s = v * dt
-        theta_mid = self.pre_theta + delta_theta /2
-
-        self.x = self.pre_x + math.cos(theta_mid) * delta_s
-        self.y = self.pre_y + math.sin(theta_mid) * delta_s
+        self.theta = self.pre_theta + delta_theta
+        self.x = self.pre_x + math.cos(self.theta) * delta_s
+        self.y = self.pre_y + math.sin(self.theta) * delta_s
 
         odom_msg = Odometry()
         odom_msg.header.stamp = self.get_clock().now().to_msg()
@@ -178,19 +171,19 @@ class ConnectNode(Node):
         odom_msg.pose.pose.position.x = self.x
         odom_msg.pose.pose.position.y = self.y
         odom_msg.pose.pose.orientation = self.create_quaternion_msg_from_yaw(self.theta)
-        odom_msg.twist.twist.linear.x = v
-        odom_msg.twist.twist.angular.z = w
+        odom_msg.twist.twist.linear.x = delta_s / dt
+        odom_msg.twist.twist.angular.z = delta_theta / dt
         self.odom_pub.publish(odom_msg)
 
         self.pre_theta = self.theta
         self.pre_x = self.x
         self.pre_y = self.y
         self.pre_measurement_time = current_time
-        self.get_logger().info(f"[ODOM PUB] x={self.x:.2f}, y={self.y:.2f}, theta={self.theta}")
+        self.get_logger().info(f"[ODOM PUB] x={self.x:.2f}, y={self.y:.2f}")
 
     def velocities_callback(self, msg):
         self.write_serial(0, msg.data[0], msg.data[1])
-    
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -198,6 +191,7 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
