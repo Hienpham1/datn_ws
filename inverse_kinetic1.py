@@ -14,7 +14,7 @@ class InverseKineticNode(Node):
         self.declare_parameter('topic_velocities', 'topic_velocities')
         self.declare_parameter('cmd_vel', 'cmd_vel')
         self.declare_parameter('wheel_radius', 0.05)
-        self.declare_parameter('wheels_distance', 0.09)
+        self.declare_parameter('wheels_distance', 0.305)
         self.declare_parameter('steering_factor', 71.2) #dieu chinh cho nay 71.2 
         self.declare_parameter('t_acceleration', 1.0)
         self.declare_parameter('t_decreasing', 0.5)
@@ -54,8 +54,6 @@ class InverseKineticNode(Node):
         omega_right = (1.0 / (2.0 * self.wheel_radius)) * (2.0 * linear_vel + self.wheels_distance * angular_vel)
         self.left_wheel_velocity = self.convert_pwm(omega_left * (60 / (2 * math.pi)))
         self.right_wheel_velocity = self.convert_pwm(omega_right * (60 / (2 * math.pi)))
-        #self.left_wheel_velocity = int(omega_left * 100)
-        #self.right_wheel_velocity = int(omega_right * 100)
         self.get_logger().info(f"pub velo: left={-self.left_wheel_velocity}, right={self.right_wheel_velocity}")
         self.get_logger().info(f"omega_left={omega_left}, omega_right={omega_right}")
     def velocity_handling(self):
