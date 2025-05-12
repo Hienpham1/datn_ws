@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'trajectory_follower_node = trajectory_follower.follower_node:main',
             'k_tuner_node = trajectory_follower.gui_k_tuner:main',
+            'follower_pid_node = trajectory_follower.follower_pid_node:main'
         ],
     },
 )
