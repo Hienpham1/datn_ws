@@ -23,6 +23,7 @@ setup(
         'console_scripts': [
             'planner_node = trajectory_planner.planner_node:main',
             'pose_array_visualizer = trajectory_planner.visualizer_node:main',
+            'duong_thang = trajectory_planner.duong_thang:main'
         ],
     },
 )
