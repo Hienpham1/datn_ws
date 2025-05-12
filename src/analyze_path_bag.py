@@ -1,3 +1,5 @@
+#ros2 bag record /planned_path /odom_encoder -o robot_drawing_log
+
 import rosbag2_py
 import rclpy.serialization
 from geometry_msgs.msg import PoseArray
