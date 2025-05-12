@@ -5,8 +5,8 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='trajectory_planner',
-            executable='planner_node',
-            name='planner_node',
+            executable='duong_thang',
+            name='duong_thang',
             output='screen'
         ),
         Node(
