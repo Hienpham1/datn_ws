@@ -6,6 +6,8 @@ from gpiozero import DigitalInputDevice
 from gpiozero import RotaryEncoder
 import time
 import math
+from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
 
 class GPIOZeroEncoderNode(Node):
     def __init__(self):
@@ -34,6 +36,7 @@ class GPIOZeroEncoderNode(Node):
         self.pre_y = 0.0
 
         self.odom_pub = self.create_publisher(Odometry, '/odom_encoder', 10)
+        self.tf_broadcaster = TransformBroadcaster(self)
         self.prev_time = time.time()
         self.timer = self.create_timer(0.05, self.update_odom)  # 20 Hz
 
@@ -79,6 +82,18 @@ class GPIOZeroEncoderNode(Node):
         odom.twist.twist.angular.z = w
 
         self.odom_pub.publish(odom)
+
+        # Create TF transform
+        t = TransformStamped()
+        t.header.stamp = odom_msg.header.stamp
+        t.header.frame_id = 'odom'
+        t.child_frame_id = 'base_link'
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = 0.0
+        q = self.yaw_to_quat(self.theta)
+        t.transform.rotation = q
+        self.tf_broadcaster.sendTransform(t)
 
     def yaw_to_quat(self, yaw):
         return Quaternion(
