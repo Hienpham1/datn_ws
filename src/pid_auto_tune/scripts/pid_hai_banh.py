@@ -35,25 +35,15 @@ class InverseKineticNode(Node):
         self.declare_parameter('cmd_vel', 'cmd_vel')
         self.declare_parameter('wheel_radius', 0.05)
         self.declare_parameter('wheels_distance', 0.305)
-        self.declare_parameter('t_acceleration', 1.0)
-        self.declare_parameter('t_decreasing', 0.5)
-        self.declare_parameter('v_max_motor', 310)
         self.declare_parameter('pwm_max', 255)
 
         self.topic_velocities = self.get_parameter('topic_velocities').get_parameter_value().string_value
         self.cmd_vel = self.get_parameter('cmd_vel').get_parameter_value().string_value
         self.wheel_radius = self.get_parameter('wheel_radius').get_parameter_value().double_value
         self.wheels_distance = self.get_parameter('wheels_distance').get_parameter_value().double_value
-        self.t_acceleration = self.get_parameter('t_acceleration').get_parameter_value().double_value
-        self.t_decreasing = self.get_parameter('t_decreasing').get_parameter_value().double_value
-        self.v_max_motor = self.get_parameter('v_max_motor').get_parameter_value().integer_value
         self.pwm_max = self.get_parameter('pwm_max').get_parameter_value().integer_value
 
         # Initialize variables
-        self.true_linear_vel = 0.0
-        self.realtime_t = 0.0
-        self.up_cnt = 0
-        self.down_cnt = 0
         self.left_pwm = 0
         self.right_wm = 0   
         self.current_left = 0.0
@@ -132,8 +122,8 @@ class InverseKineticNode(Node):
         pwm_right = self.pid_right.compute(error_right, dt)
 
         # gioi han gia tri pwm
-        corrected_left = max(minpwm_left, 255), -255)
-        corrected_right = max(minpwm_right, 255), -255)
+        corrected_left = max(minpwm_left, self.pwm_max), -self.pwm_max)
+        corrected_right = max(minpwm_right, self.pwm_max), -self.pwm_max)
 
         # gui pwm
         self.left_pwm = corrected_left
