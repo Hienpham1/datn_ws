@@ -27,7 +27,7 @@ class InverseKineticNode(Node):
     def __init__(self):
         super().__init__('inverse_kinetic')
 
-        self.pid_left = PID(Kp=0.0, Ki=0.0, Kd=0.0)
+        self.pid_left = PID(Kp= 0.0, Ki=0.0, Kd=0.0)
         self.pid_right = PID(Kp=0.0, Ki=0.0, Kd=0.0)
 
         # Declare and get parameters
@@ -45,40 +45,42 @@ class InverseKineticNode(Node):
 
         # Initialize variables
         self.left_pwm = 0
-        self.right_wm = 0   
+        self.right_pwm = 0   
         self.current_left = 0.0
         self.current_right = 0.0
         self.desired_left = 0.0
         self.desired_right = 0.0
-        self.prev_time = time.time()
+        self.dt = 0.02
+        self.received_cmd = False
 
         # Publisher and Subscriber
         self.pub_v = self.create_publisher(Int16MultiArray, self.topic_velocities, 10)
         self.pub_desired_velo = self.create_publisher(Float32MultiArray, 'desired_velo', 10)
         self.pub_current_velo = self.create_publisher(Float32MultiArray, 'current_velo', 10)
 
-        self.sub = self.create_subscription(Twist, self.cmd_vel, self.velocities_callback, 10)
-        self.sub_odom = self.create_subscription(Odometry, '/odom_encoder', self.odom_callback, 10)
+        self.sub = self.create_subscription(Twist, self.cmd_vel, self.desired_velo_callback, 10)
+        self.sub_odom = self.create_subscription(Odometry, '/odom_encoder', self.current_velo_callback, 10)
         self.sub_pid_left = self.create_subscription(Float32MultiArray, '/pid_params_left', self.update_pid_left, 10)
         self.sub_pid_right = self.create_subscription(Float32MultiArray, '/pid_params_right', self.update_pid_right, 10)
 
+        self.timer = self.create_timer(self.dt, self.control)
 
     def update_pid_left(self, msg):
         kp, ki, kd = msg.data
-        self.pid_linear.Kp = kp
-        self.pid_linear.Ki = ki
-        self.pid_linear.Kd = kd
+        self.pid_left.Kp = kp
+        self.pid_left.Ki = ki
+        self.pid_left.Kd = kd
         self.get_logger().info(f"Updated left PID: Kp={kp}, Ki={ki}, Kd={kd}")
 
     def update_pid_right(self, msg):
         kp, ki, kd = msg.data
-        self.pid_angular.Kp = kp
-        self.pid_angular.Ki = ki
-        self.pid_angular.Kd = kd
+        self.pid_right.Kp = kp
+        self.pid_right.Ki = ki
+        self.pid_right.Kd = kd
         self.get_logger().info(f"Updated right PID: Kp={kp}, Ki={ki}, Kd={kd}")
 
-
-    def odom_callback(self, msg):
+    def current_velo_callback(self, msg):
+        self.received_cmd = True
         current_linear_vel = msg.twist.twist.linear.x
         current_angular_vel = msg.twist.twist.angular.z
         self.current_left = (1.0 / (2.0 * self.wheel_radius)) * (2.0 * current_linear_vel - self.wheels_distance * current_angular_vel)
@@ -89,51 +91,45 @@ class InverseKineticNode(Node):
         current_msg.data = [self.current_left, self.current_right]
         self.pub_current_velo.publish(current_msg)
 
-    def IK(self, linear_vel, angular_vel):
+    def desired_velo_callback(self, msg):
+        desired_linear_vel = msg.linear.x
+        desired_angular_vel = msg.angular.z
         # Tính toán tốc độ mong muốn cho từng bánh (rad/s)
-        self.desired_left = (1.0 / (2.0 * self.wheel_radius)) * (2.0 * linear_vel - self.wheels_distance * angular_vel)
-        self.desired_right = (1.0 / (2.0 * self.wheel_radius)) * (2.0 * linear_vel + self.wheels_distance * angular_vel)
+        self.desired_left = (1.0 / (2.0 * self.wheel_radius)) * (2.0 * desired_linear_vel - self.wheels_distance * desired_angular_vel)
+        self.desired_right = (1.0 / (2.0 * self.wheel_radius)) * (2.0 * desired_linear_vel + self.wheels_distance * desired_angular_vel)
 
         # Publish desired velocities
         desired_msg = Float32MultiArray()
         desired_msg.data = [self.desired_left, self.desired_right]
         self.pub_desired_velo.publish(desired_msg)
 
-        self.get_logger().info(f"Desired velocities - left: {self.desired_left:.2f} rad/s, right: {self.desired_right:.2f} rad/s")
+        # self.get_logger().info(f"Desired omega-left: {self.desired_left:.2f} rad/s, right: {self.desired_right:.2f} rad/s")
         
     def velocity_handling(self):
         msg = Int16MultiArray()
-        msg.data = [-self.left_pwm, self.right_pwm]
+        msg.data = [int(-self.left_pwm), int(self.right_pwm)]
         self.pub_v.publish(msg)
     
-    def control(self, desired_linear, desired_angular):
-        dt = time.time() - self.prev_time
-        self.prev_time = time.time()
-
-        #tinh toc do mong muon
-        self.IK(desired_linear, desired_angular)
-
+    def control(self):
+        if not self.received_cmd:
+            return  # bo qua neu chua nhan du lieu tu cmd_vel
         #tinh sai so
         error_left = self.desired_left - self.current_left
         error_right = self.desired_right - self.current_right
         
         #compute gia tri voi pid
-        pwm_left = self.pid_left.compute(error_left, dt)
-        pwm_right = self.pid_right.compute(error_right, dt)
+        pwm_left = self.pid_left.compute(error_left, self.dt)
+        pwm_right = self.pid_right.compute(error_right, self.dt)
 
         # gioi han gia tri pwm
-        corrected_left = max(minpwm_left, self.pwm_max), -self.pwm_max)
-        corrected_right = max(minpwm_right, self.pwm_max), -self.pwm_max)
+        corrected_left = max(min(pwm_left, self.pwm_max), -self.pwm_max)
+        corrected_right = max(min(pwm_right, self.pwm_max), -self.pwm_max)
 
         # gui pwm
         self.left_pwm = corrected_left
         self.right_pwm = corrected_right  
         self.velocity_handling()
-	self.get_logger().info(f"pwm corrected - left: {corrected_left}, right: {corrected_right}")
-
-    def velocities_callback(self, msg):
-        self.get_logger().info(f"Received velocities: linear={msg.linear.x}, angular={msg.angular.z}")
-        self.control(msg.linear.x, msg.angular.z)
+        self.get_logger().info(f"pwm-left: {corrected_left},right: {corrected_right}")
 
 def main(args=None):
     rclpy.init(args=args)
@@ -141,7 +137,6 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
