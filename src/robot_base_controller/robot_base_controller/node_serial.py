@@ -58,7 +58,7 @@ class ConnectNode(Node):
         	v_banh_trai,
         	chieu_phai,
         	v_banh_phai,
-            son_state
+                son_state
     	])
         self.ser.write(data)
 
