@@ -66,7 +66,7 @@ class ConnectNode(Node):
         self.son_state = 1 if msg.data else 0
         self.get_logger().info(f"Updated son state: {self.son_state}")
     def velocities_callback(self, msg):
-        self.write_serial(0, msg.data[0], msg.data[1])
+        self.write_serial(0, msg.data[0], msg.data[1], self.son_state)
     
 def main(args=None):
     rclpy.init(args=args)
