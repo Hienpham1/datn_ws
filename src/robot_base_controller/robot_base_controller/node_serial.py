@@ -13,22 +13,25 @@ class ConnectNode(Node):
         # Declare parameters
         self.declare_parameter('port', '/dev/ttyACM0')
         self.declare_parameter('topic_velocities', 'topic_velocities')
+        self.declare_parameter('topic_son', 'topic_son')
         
         # Get parameters
         self.port = self.get_parameter('port').get_parameter_value().string_value
         self.topic_velocities = self.get_parameter('topic_velocities').get_parameter_value().string_value
+        self.topic_son = self.get_parameter('topic_son').get_parameter_value().string_value
         
         # Initialize variable
         self.ser = None
+        self.son_state = 0
         # Publishers and Subscribers
         self.velo_sub = self.create_subscription(Int16MultiArray, self.topic_velocities, self.velocities_callback, 10)
         # Connect to serial
         self.connect_serial()
-        # Initialize motors
+        # Initialize motors on son
         for _ in range(2):
-            self.write_serial(1, 0, 0)
+            self.write_serial(1, 0, 0, 0)
         for _ in range(5):
-            self.write_serial(0, 0, 0)
+            self.write_serial(0, 0, 0, 0)
 
     def connect_serial(self):
         try:
@@ -38,7 +41,7 @@ class ConnectNode(Node):
             self.get_logger().error(f"Unable to open serial port {self.port}: {e}")
             time.sleep(5)
 
-    def write_serial(self, byte_reset, v_banh_trai, v_banh_phai):
+    def write_serial(self, byte_reset, v_banh_trai, v_banh_phai, son_state):
         dir_trai = 1 if v_banh_trai < 0 else 0
         dir_phai = 1 if v_banh_phai < 0 else 0
         v_banh_trai = abs(v_banh_trai)
@@ -55,10 +58,13 @@ class ConnectNode(Node):
         	v_banh_trai,
         	chieu_phai,
         	v_banh_phai,
-        	0x00  # padding hoặc checksum 
+            son_state
     	])
         self.ser.write(data)
 
+    def son_callback(self, msg):
+        self.son_state = 1 if msg.data else 0
+        self.get_logger().info(f"Updated son state: {self.son_state}")
     def velocities_callback(self, msg):
         self.write_serial(0, msg.data[0], msg.data[1])
     
