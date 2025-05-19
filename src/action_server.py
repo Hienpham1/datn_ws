@@ -62,7 +62,7 @@ class RobotActionServer(Node):
         
         # Tạo velocity command
         cmd_vel = Twist()
-        cmd_vel.linear.x = 0.2  # Tốc độ 0.2 m/s
+        cmd_vel.linear.x = 0.4  # Tốc độ 0.4 m/s
         
         while distance_traveled < distance_to_go:
             # Kiểm tra có bị cancel không
