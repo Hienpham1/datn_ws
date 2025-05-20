@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import Twist, PoseStamped
 from math import sqrt
 
 class DriveStraight1Meter(Node):
@@ -9,6 +9,7 @@ class DriveStraight1Meter(Node):
         super().__init__('drive_straight_1m')
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.path_pub = self.create_publisher(Path, '/desired_path', 10)
 
         self.initial_pose = None
         self.initial_yaw = None
@@ -17,6 +18,25 @@ class DriveStraight1Meter(Node):
         self.Kp_angle = 1.5
         self.max_angular = 0.3
 
+    def publish_desired_path(self, current_pose):
+        path = Path()
+        path.header.frame_id = "base_link"
+        path.header.stamp = self.get_clock().now().to_msg()
+    
+        pose_start = PoseStamped()
+        pose_start.header = path.header
+        pose_start.pose.position.x = 0.0
+        pose_start.pose.position.y = 0.0
+        pose_start.pose.position.z = 0.0
+        pose_start.pose.orientation.w = 1.0
+    
+        pose_end = PoseStamped()
+        pose_end.header = path.header
+        pose_end.pose.position.x = 1.0  # 1m phía trước trong base_link
+        pose_end.pose.orientation.w = 1.0
+    
+        path.poses = [pose_start, pose_end]
+        self.path_pub.publish(path)
     def odom_callback(self, msg):
         pos = msg.pose.pose.position
         ori = msg.pose.pose.orientation
