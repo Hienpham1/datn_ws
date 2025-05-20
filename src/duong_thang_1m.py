@@ -20,7 +20,7 @@ class DriveStraight1Meter(Node):
 
     def publish_desired_path(self, current_pose):
         path = Path()
-        path.header.frame_id = "base_link"
+        path.header.frame_id = "odom"
         path.header.stamp = self.get_clock().now().to_msg()
     
         pose_start = PoseStamped()
