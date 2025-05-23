@@ -13,12 +13,10 @@ def euler_to_quaternion(yaw):
         w=math.cos(yaw / 2.0)
     )
 
-
 def apply_offset(x, y, theta, offset=0.245):
-    x_r = x - offset * math.cos(theta)
-    y_r = y - offset * math.sin(theta)
+    x_r = x + offset * math.cos(theta)
+    y_r = y + offset * math.sin(theta)
     return x_r, y_r, theta
-
 
 class TrajectoryPlanner(Node):
     def __init__(self):
@@ -45,14 +43,12 @@ class TrajectoryPlanner(Node):
 
         # Bật sơn và đi từ A → B
         self.spray_pub.publish(Int32(data=1))
-
-        for i in range(20):  # 20 điểm từ 0m đến 2m
-            x = 0.1 * i
-            y = 0.0
-            theta = 0.0  # Hướng về phía x
-            #xr, yr, th = apply_offset(x, y, theta)
-            waypoints.append((x, y, theta))
-
+        
+        waypoints = [
+            (1.5, 0.0, 0.0),   # go straight to x=1
+            # (2.0, 1.0, 0.0),   # turn right/up
+            # (3.0, 0.0, 0.0),   # turn back down
+        ]
         self.spray_pub.publish(Int32(data=0))  # Tắt sơn khi kết thúc
 
         for x, y, yaw in waypoints:
@@ -61,6 +57,20 @@ class TrajectoryPlanner(Node):
             pose.position.y = y
             pose.orientation = euler_to_quaternion(yaw)
             pose_array.poses.append(pose)
+	
+        #waypoints = []
+    	#Tinh so diem tren duong tron
+        #num_points = 36  # Ví dụ: 36 điểm cách nhau 10 độ
+        #for i in range(num_points):
+        #    theta = (i / num_points) * 2 * math.pi  # Góc quay từ 0 đến 2pi
+        #    x = 0 + 2 * math.cos(theta)  # Tâm (0,2), bán kính 2
+        #    y = 2 + 2 * math.sin(theta)
+        #    yaw = theta  # Hướng quay theo đường tròn
+        #    pose = Pose()
+        #    pose.position.x = x
+        #    pose.position.y = y
+        #    pose.orientation = euler_to_quaternion(yaw)
+        #    pose_array.poses.append(pose)
 
         self.pose_pub.publish(pose_array)
         self.get_logger().info(f"Đã gửi đường đi A → B với {len(pose_array.poses)} điểm.")
