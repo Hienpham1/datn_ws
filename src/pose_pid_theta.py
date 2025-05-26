@@ -102,8 +102,8 @@ class FollowerPIDNode(Node):
         self.get_logger().info(f"dx={dx:.3f}, dy={dy:.3f}, goal_theta_deg={math.degrees(goal_theta):.2f}")
         self.get_logger().info(f"[POS] curr_x={self.curr_x:.3f}, curr_y={self.curr_y:.3f}, curr_theta_deg={math.degrees(self.curr_theta):.2f}")
         dist = math.sqrt(dx**2 + dy**2)
-
-        if dist < self.arrive_thresh:
+        # bỏ xuống sau khi tính alpha
+        if dist < self.arrive_thresh and abs(alpha) < angle_thresh:
             self.get_logger().info(f"Reached waypoint {self.current_waypoint_idx + 1}")
             self.current_waypoint_idx += 1
             self.E = 0.0
@@ -119,6 +119,7 @@ class FollowerPIDNode(Node):
         self.pub_desired_theta.publish(desired_msg)
 
         alpha = self.fix_angle(goal_theta - self.curr_theta)
+        angle_thresh = math.radians(8)
         self.get_logger().info(f"[DEBUG] Goal Theta: {math.degrees(goal_theta):.2f}, "
                        f"Current Theta: {math.degrees(self.curr_theta):.2f}, "
                        f"Alpha: {math.degrees(alpha):.2f}")
@@ -131,12 +132,14 @@ class FollowerPIDNode(Node):
         self.old_e = e_P
 
         w = self.Kp * e_P + self.Ki * e_I * self.dt + self.Kd * e_D / self.dt
-        w = np.clip(w, -0.5, 0.5)  # gioi han
+        w = np.clip(w, -0.3, 0.3)  # gioi han
 
-        # Giam khi gan den
-        v = self.v
-        if dist < self.slow_down_dist:
-            v = max(0.1, self.v * (dist / self.slow_down_dist))  # giam ve 0.1 m/s
+        if abs(alpha) > angle_thresh:
+            v = 0.0  # đứng lại, chỉ xoay
+        else:
+            v = self.v
+            if dist < self.slow_down_dist:
+                v = max(0.1, self.v * (dist / self.slow_down_dist))
     
         cmd = Twist()
         cmd.linear.x = v
