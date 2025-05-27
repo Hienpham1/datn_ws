@@ -65,7 +65,7 @@ class TrajectoryPlanner(Node):
         #    theta = (i / num_points) * 2 * math.pi  # Góc quay từ 0 đến 2pi
         #    x = 0 + 2 * math.cos(theta)  # Tâm (0,2), bán kính 2
         #    y = 2 + 2 * math.sin(theta)
-        #    yaw = theta  # Hướng quay theo đường tròn
+        #    yaw = theta + math.pi / 2 # Hướng quay theo đường tròn
         #    pose = Pose()
         #    pose.position.x = x
         #    pose.position.y = y
