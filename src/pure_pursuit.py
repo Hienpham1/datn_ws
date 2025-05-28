@@ -10,7 +10,7 @@ class PurePursuitNode(Node):
         super().__init__('pure_pursuit_node')
 
         # Tham số: điều chỉnh theo loại đường
-        self.declare_parameter('lookahead_distance', 0.5)  # đổi tại launch nếu cần
+        self.declare_parameter('lookahead_distance', 0.25)  # đổi tại launch nếu cần
         self.lookahead_distance = self.get_parameter('lookahead_distance').get_parameter_value().double_value
 
         # ROS I/O
