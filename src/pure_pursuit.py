@@ -21,11 +21,15 @@ class PurePursuitNode(Node):
         # Biến lưu trạng thái
         self.path = []
         self.current_pose = None
+        self.integral_angle = 0.0
+        self.prev_angle_error = 0.0
 
         self.get_logger().info(f"Pure Pursuit Node started. Lookahead = {self.lookahead_distance} m")
 
     def path_callback(self, msg):
         self.path = msg.poses
+        self.integral_angle = 0.0
+        self.prev_angle_error = 0.0
         self.get_logger().info(f"Received path with {len(self.path)} waypoints.")
 
     def odom_callback(self, msg):
@@ -69,11 +73,18 @@ class PurePursuitNode(Node):
         # Sai số góc
         angle_error = math.atan2(math.sin(angle_to_target - current_yaw),
                                  math.cos(angle_to_target - current_yaw))
-
+        self.integral_angle += angle_error
+        derivative_angle = angle_error - self.prev_angle_error
+        self.prev_angle_error = angle_error
+        # PID gains (tune thử nghiệm)
+        Kp, Ki, Kd = 1.2, 0.01, 0.1  
+        w = Kp * angle_error + Ki * self.integral_angle + Kd * derivative_angle
+        w = max(-0.5, min(0.5, w))
+        
         # Điều khiển vận tốc
         lookahead_dist = math.hypot(dx, dy)
-        v = max(0.1, min(0.25, 0.5 * lookahead_dist))         # tốc độ tuyến tính giảm nếu gần
-        w = max(-0.5, min(0.5, 1.2 * angle_error))            # giới hạn góc quay
+        #v = max(0.1, min(0.25, 0.5 * lookahead_dist))         # tốc độ tuyến tính giảm nếu gần
+        v = 0.2 * (1 + math.tanh(lookahead_dist - self.lookahead_distance))
 
         cmd = Twist()
         cmd.linear.x = v
