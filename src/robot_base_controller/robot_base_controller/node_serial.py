@@ -42,32 +42,24 @@ class ConnectNode(Node):
             self.get_logger().error(f"Unable to open serial port {self.port}: {e}")
             time.sleep(5)
 
-    def write_serial(self, byte_reset, pwm_left, pwm_right, paint_state):
+    def velocities_callback(self, msg):
+        # Gửi gói tốc độ (3 byte): [0x01, dir_pwm_left, dir_pwm_right]
+        pwm_left = max(-255, min(255, msg.data[0]))
+        pwm_right = max(-255, min(255, msg.data[1]))
+        
         dir_left = 1 if pwm_left < 0 else 0
         dir_right = 1 if pwm_right < 0 else 0
         pwm_left = abs(pwm_left)
         pwm_right = abs(pwm_right)
-        pwm_left = min(pwm_left, 255)
-        pwm_right = min(pwm_right, 255)
-
-        dir_left = (dir_left << 7) | 0x01
-        dir_right = (dir_right << 7) | 0x02
-
-        data = bytes([
-        	byte_reset,
-        	dir_left,
-        	pwm_left,
-        	dir_right,
-        	pwm_right,
-            paint_state
-    	])
-        self.ser.write(data)
-
+        
+        speed_data = bytes([0x01, dir_left, pwm_left, dir_right, pwm_right])
+        self.ser.write(speed_data)
+    
     def paint_callback(self, msg):
-        self.paint_state = 1 if msg.data else 0
-        self.get_logger().info(f"Updated paint state: {self.paint_state}")
-    def velocities_callback(self, msg):
-        self.write_serial(0, msg.data[0], msg.data[1], self.paint_state)
+        # Gửi gói paint (2 byte): [0x02, paint_state]
+        paint_state = 1 if msg.data[0] else 0
+        paint_data = bytes([0x02, paint_state])
+        self.ser.write(paint_data)
     
 def main(args=None):
     rclpy.init(args=args)
