@@ -1,0 +1,164 @@
+#include "MotorController.h"
+#include "EncoderReader.h"
+#include <Servo.h>
+
+// chan dc 1
+#define M1_IN_R 12   // PWM thuan
+#define M1_IN_L 13   // PWM nguoc
+#define M1_EN_R 23   // Enable 
+#define M1_EN_L 25   // Enable 
+
+// chan dc 2
+#define M2_IN_R 11   // PWM thuan
+#define M2_IN_L 10   // PWM nguoc
+#define M2_EN_R 27   // Enable 
+#define M2_EN_L 29   // Enable 
+
+// chan bom va servo
+#define PWM_SERVO 9
+#define PUMP 8
+
+//nut nhan 
+#define BT_TEST_1 46
+#define BT_TEST_2 48
+#define BT_TEST_3 50
+#define BT_TEST_4 52
+
+//den 
+#define LED1 49
+#define LED2 51
+#define LED3 53
+//serial
+#define MAX_DATA_LEN 10
+
+// dong co 
+MotorController motorLeft(M1_IN_R, M1_IN_L, M1_EN_R, M1_EN_L);
+MotorController motorRight(M2_IN_R, M2_IN_L, M2_EN_R, M2_EN_L);
+Servo myservo;
+
+// Servo positions
+const int SERVO_HOME_POS = 0;
+const int SERVO_PAINT_POS = 40;
+
+// Pump control
+bool pumpActive = false;
+int pumpSpeed = 35;  // Default pump speed when active`
+
+// Biến dữ liệu truyền
+uint8_t rx_buffer[MAX_DATA_LEN];
+uint8_t idx = 0;
+bool receiving = false;
+uint8_t expected_len = 0;
+uint8_t header = 0;
+unsigned long lastSendTime = 0;
+
+void receive_ros();
+void checkButtons();
+void handle_packet(uint8_t header, uint8_t *data, uint8_t len);
+
+void setup() {
+  Serial.begin(115200);
+  motorLeft.setup();
+  motorRight.setup();
+  myservo.attach(PWM_SERVO);
+  myservo.write(SERVO_HOME_POS);
+  pinMode(PUMP, OUTPUT);
+  digitalWrite(PUMP, LOW);
+  pinMode(BT_TEST_1, INPUT_PULLUP);
+  pinMode(BT_TEST_2, INPUT_PULLUP);
+  pinMode(BT_TEST_3, INPUT_PULLUP);
+  pinMode(BT_TEST_4, INPUT_PULLUP);
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  pinMode(LED3, OUTPUT);
+  digitalWrite(LED1, LOW);
+  digitalWrite(LED2, LOW);
+  digitalWrite(LED3, LOW);
+  lastSendTime = millis();
+}
+
+void loop() {
+  //checkButtons();
+  receive_ros();
+}
+// ========== HÀM ĐIỀU KHIỂN ========== //
+
+void receive_ros() {
+  while (Serial.available()) {
+    uint8_t byte = Serial.read();
+    // Bat dau goi
+    if (!receiving && byte == 0xAA) {
+      receiving = true;
+      idx = 0;
+      continue;
+    }
+    if (receiving) {
+      if (idx == 0) header = byte;
+      else if (idx == 1) expected_len = byte;
+      else if (idx < expected_len + 2) {
+        rx_buffer[idx - 2] = byte;
+      }
+      else if (idx == expected_len + 2) {
+        uint8_t checksum = (header + expected_len);
+        for (uint8_t i = 0; i < expected_len; i++) checksum += rx_buffer[i];
+        checksum &= 0xFF;
+        if (checksum == byte) {
+          handle_packet(header, rx_buffer, expected_len);
+        }
+        receiving = false;
+      }
+      idx++;
+    }
+  }
+}
+void handle_packet(uint8_t header, uint8_t *data, uint8_t len) {
+  if (header == 0x01 && len == 4) {
+    uint8_t dir1 = data[0];
+    uint8_t pwm1 = data[1];
+    uint8_t dir2 = data[2];
+    uint8_t pwm2 = data[3];
+    motorLeft.drive(pwm1, dir1);
+    motorRight.drive(pwm2, dir2);
+  } else if (header == 0x02 && len == 1) {
+    if (data[0] == 1) {
+      myservo.write(SERVO_PAINT_POS);
+      analogWrite(PUMP, 80);
+    } else {
+      myservo.write(SERVO_HOME_POS);
+      analogWrite(PUMP, 0);
+    }
+  }
+}
+
+void checkButtons() {
+  // Button 2: Stop both motors
+  if (digitalRead(BT_TEST_4) == LOW) {
+    motorLeft.stop();
+    motorRight.stop();
+    delay(200);  // Debounce
+    return;
+  }
+  
+  // Button 3: Return servo to home position
+  if (digitalRead(BT_TEST_2) == LOW) {
+    myservo.write(SERVO_HOME_POS);
+    //myservo.write(40);    
+    delay(200);  // Debounce
+    return;
+  }
+  
+  // Button 4: Turn off pump
+  if (digitalRead(BT_TEST_3) == LOW) {
+    //pumpActive = false;
+    pumpActive = true;
+    analogWrite(PUMP, 80);
+    delay(200);  // Debounce
+    return;
+  }
+    if (digitalRead(BT_TEST_1) == LOW) {
+    pumpActive = false;
+    analogWrite(PUMP, 0);
+    delay(200);  // Debounce
+    return;
+  }
+}
