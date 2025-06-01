@@ -38,10 +38,9 @@ class TrajectoryPlanner(Node):
 
         # Lịch bật/tắt sơn (theo chỉ số waypoint)
         self.paint_schedule = {
-            0: 1,  # bật sơn trước khi đi đến WP0
-            1: 0,  # tắt sơn sau khi đến WP0
-            2: 1,  # bật lại trước khi đi đến WP2
-            3: 0   # tắt sau khi đến WP2
+            0: [40, 40],
+            2: [0, 1],
+            4: [0, 0]
         }
 
         self.create_subscription(Bool, '/wp_reached', self.wp_reached_callback, 10)
@@ -77,9 +76,13 @@ class TrajectoryPlanner(Node):
         # Sơn nếu tại WP này có cấu hình
         if self.wp_idx in self.paint_schedule:
             paint_cmd = self.paint_schedule[self.wp_idx]
-            self.spray_pub.publish(Int16MultiArray(data=[paint_cmd]))
-            state = "BẬT" if paint_cmd else "TẮT"
-            self.get_logger().info(f"Sơn: {state} (tại WP{self.wp_idx})")
+            # đảm bảo có 2 phần tử
+            if len(paint_cmd) == 2:
+                self.spray_pub.publish(Int16MultiArray(data=paint_cmd))
+                self.get_logger().info(f"[PAINT] Gửi bơm={paint_cmd[0]}, servo={paint_cmd[1]} (tại WP{self.wp_idx})")
+            else:
+                self.get_logger().warn(f"paint_schedule tại WP{self.wp_idx} không hợp lệ: {paint_cmd}")
+
 
         self.get_logger().info(
             f"Gửi WP{self.wp_idx}: ({x:.2f}, {y:.2f}, {math.degrees(theta):.1f}°)"
