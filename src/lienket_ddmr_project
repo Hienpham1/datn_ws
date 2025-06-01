@@ -1,1 +1,15 @@
 https://drive.google.com/drive/folders/1MSDQy6KoD23ZIjZRhBjDubziM7ADrwVD?usp=drive_link
+
+1. Xem folder source code
+tren rasp  --> lay file laser_filter_node.py trong robot_base_controller de ve luu do; neu can thi lay them file launch trong robot_base_controller
+de xem va ve luu do tong/chung cho he thong --> bao gom cac node nhu:
+connect_node
+read_encoder_odom_node (node ni vua xuat odometry vua phat TF odom-->base_link),
+rplidar_node (cua pkg ros2-doc data lidar raw); 
+laser_filter_node (loc laser de quet 180 do goc phia truoc robot va khoang cach 0.15-0.8m,kiem tra vat can <= 0.02m trong pham vi nay 
+sau do publish len topic /filtered_scan data da loc, topic /obstacle_detection - co vat can hay ko (true/false)); 
+2 node static_transform_publisher de phat TF2 tĩnh cho baselink-->laser va baselink-->tool(roller).
++ rplidar --> rplidar_node --> /scan --> laser_filter_node--> /filtered_scan va /obstacle_detection
++ TF2: odom-->base_link --> laser
+                        --> tool
+
