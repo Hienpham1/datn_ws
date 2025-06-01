@@ -28,38 +28,40 @@ class ConnectNode(Node):
         self.paint_sub = self.create_subscription(Int16MultiArray, self.topic_paint, self.paint_callback, 10)
         # Connect to serial
         self.connect_serial()
-        # Initialize motors on paint
-        for _ in range(2):
-            self.write_serial(1, 0, 0, 0)
-        for _ in range(5):
-            self.write_serial(0, 0, 0, 0)
 
     def connect_serial(self):
         try:
             self.ser = serial.Serial(self.port, 115200, timeout=1)
+            # Reset motor and servo+pump
+            for i in range(2):
+                self.ser.write(bytes([0x0B, 0, 0, 0, 0, 0, 0xFF])) # 7 byte
+                self.ser.write(bytes([0x0C, 0, 0, 0, 0xFF]))       # 5 byte
             self.get_logger().info(f"Serial port {self.port} initialized and opened.")
         except serial.SerialException as e:
             self.get_logger().error(f"Unable to open serial port {self.port}: {e}")
+            self.ser = None
             time.sleep(5)
 
-    def send_packet(self, header, data):
-        length = len(data)
-        checksum = (header + length + sum(data)) & 0xFF
-        packet = bytes([0xAA, header, length] + data + [checksum])
-        self.ser.write(packet)
-    
     def velocities_callback(self, msg):
+        # Gửi gói tốc độ (7 byte): [0x0B, dir_left, pwm_left, dir_right, pwm_right, checksum, 0xFF]
         pwm_left = max(-255, min(255, msg.data[0]))
         pwm_right = max(-255, min(255, msg.data[1]))
+        
         dir_left = 1 if pwm_left < 0 else 0
         dir_right = 1 if pwm_right < 0 else 0
-        data = [dir_left, abs(pwm_left), dir_right, abs(pwm_right)]
-        self.send_packet(0x01, data)
+        pwm_left = abs(pwm_left)
+        pwm_right = abs(pwm_right)
+        CRC = (dir_left + dir_right + pwm_left + pwm_right) % 256
+        speed_data = bytes([0x0B, dir_left, pwm_left, dir_right, pwm_right, CRC, 0xFF])
+        self.ser.write(speed_data)
     
     def paint_callback(self, msg):
-        paint_state = 1 if msg.data[0] else 0
-        self.send_packet(0x02, [paint_state])
-
+        # Gửi gói paint (5 byte): [0x0B, value_pump, value_servo, 0xFF]
+        pump_value = max(0, min(255, int(msg.data[0])))
+        servo_value = max(30, min(50, int(msg.data[1])))
+        CRC = (pump_value + servo_value) % 256
+        paint_data = bytes([0x0C, pump_value, servo_value, CRC, 0xFF])
+        self.ser.write(paint_data)
     
 def main(args=None):
     rclpy.init(args=args)
