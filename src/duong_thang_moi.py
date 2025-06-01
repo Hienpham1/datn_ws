@@ -26,10 +26,12 @@ class TrajectoryPlanner(Node):
         self.pose_pub = self.create_publisher(PoseArray, '/planned_path', 10)
         self.spray_pub = self.create_publisher(Int16MultiArray, '/topic_paint', 10)
         self.wp_idx = 0
+        self.timer_period = 0.2 
+        self.timer = self.create_timer(self.timer_period, self.timer_callback)
 
         # Danh sách waypoint: (x, y, theta)
         self.waypoints = [
-            (1.5, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
             #(2.0, 0.0, math.pi/2),
             #(1.5, 0.245, math.pi/2),
         ]
@@ -45,18 +47,17 @@ class TrajectoryPlanner(Node):
         self.create_subscription(Bool, '/wp_reached', self.wp_reached_callback, 10)
 
         self.get_logger().info('Trajectory Planner started...')
-        self.send_next_waypoint()  # Gửi WP đầu tiên ngay khi khởi động
+        self.send_current_waypoint()  # Gửi WP đầu tiên ngay khi khởi động
 
     def wp_reached_callback(self, msg):
         if msg.data:
             self.wp_idx += 1
-            if self.wp_idx < len(self.waypoints):
-                self.send_next_waypoint()
-            else:
+            if self.wp_idx >= len(self.waypoints):
                 self.get_logger().info("Hoàn thành tất cả các waypoint.")
-                self.spray_pub.publish(Int16MultiArray(data=0))  # đảm bảo tắt sơn khi kết thúc
+                self.spray_pub.publish(Int16MultiArray(data=[0]))  # Tắt sơn
 
-    def send_next_waypoint(self):
+
+    def send_current_waypoint(self):
         x, y, theta = self.waypoints[self.wp_idx]
         x, y, theta = apply_offset(x, y, theta)
 
@@ -70,10 +71,10 @@ class TrajectoryPlanner(Node):
         pose.orientation = euler_to_quaternion(theta)
         pose_array.poses.append(pose)
 
-        # Gửi waypoint
+        # Gửi waypoint hiện tại
         self.pose_pub.publish(pose_array)
 
-        # Gửi lệnh bật/tắt sơn nếu cần
+        # Sơn nếu tại WP này có cấu hình
         if self.wp_idx in self.paint_schedule:
             paint_cmd = self.paint_schedule[self.wp_idx]
             self.spray_pub.publish(Int16MultiArray(data=[paint_cmd]))
@@ -82,8 +83,17 @@ class TrajectoryPlanner(Node):
 
         self.get_logger().info(
             f"Gửi WP{self.wp_idx}: ({x:.2f}, {y:.2f}, {math.degrees(theta):.1f}°)"
-        )
-        self.get_logger().info(f"Received frame_id: {pose_array.header.frame_id}")
+    )
+
+
+    def timer_callback(self):
+        if self.wp_idx < len(self.waypoints):
+            self.send_current_waypoint()
+        else:
+            self.timer.cancel()
+            self.get_logger().info("Đã hoàn thành tất cả waypoint.")
+            self.spray_pub.publish(Int16MultiArray(data=[0]))  # đảm bảo tắt sơn
+
 
 
 def main(args=None):
